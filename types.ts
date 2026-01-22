@@ -18,4 +18,6 @@ export interface GameState {
   lines: number;
   isPaused: boolean;
   isGameOver: boolean;
+  theme: 'electronika' | 'technicolor';
+  pieceStats: Record<PieceType, number>;
 }
