@@ -11,49 +11,42 @@ interface MusicVisualizerProps {
 const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ isPlaying, isMuted, onToggle, theme }) => {
   const isTechnicolor = theme === 'technicolor';
   
-  // Design color for Technicolor: Red and Cyan offsets with White core
-  const bars = Array.from({ length: 20 });
-  const statusLabel = isMuted ? '[ MUTED ]' : '[ PLAYING ]';
+  // Design matching the reference: 5 simple vertical bars
+  const bars = Array.from({ length: 5 });
+  const statusLabel = isMuted ? 'MUTED' : 'PLAYING';
 
   return (
     <div 
-      className="flex flex-col items-center justify-center cursor-pointer group w-full pb-2"
+      className="flex flex-col items-center justify-center cursor-pointer group"
       onClick={onToggle}
       title={isMuted ? "Unmute Music" : "Mute Music"}
     >
-      {/* Visualizer Container */}
-      <div className="flex items-end justify-center h-[4vh] gap-[0.5vh] w-full px-[1vh]">
+      {/* Visualizer Container - Ultra-thin symmetric peak style */}
+      <div className="flex items-center justify-center h-[3vh] gap-[1vh]">
         {bars.map((_, i) => (
           <motion.div
             key={i}
-            className={`w-[0.8vh] rounded-t-sm ${isMuted ? 'opacity-30' : 'opacity-80'}`}
-            style={isTechnicolor ? {
-              backgroundColor: 'white',
-              boxShadow: '2px 2px 0px #ef4444, -2px -2px 0px #22d3ee, 0 0 12px rgba(255,255,255,0.6)'
-            } : {
-              backgroundColor: '#00ff00',
-              boxShadow: '0 0 5px #00ff00'
-            }}
+            className={`w-[0.2vh] ${isMuted ? 'bg-white/20' : 'bg-white'} shadow-[0_0_10px_rgba(255,255,255,0.2)]`}
             animate={
               !isMuted && isPlaying 
                 ? { 
                     height: [
-                      "10%", 
-                      `${Math.random() * 60 + 20}%`, 
-                      `${Math.random() * 90 + 10}%`, 
-                      "15%"
+                      `${30 + (i === 0 || i === 4 ? 0 : i === 1 || i === 3 ? 15 : 30)}%`, 
+                      `${Math.random() * 40 + (i === 2 ? 60 : 30)}%`, 
+                      `${Math.random() * 20 + (i === 2 ? 80 : 20)}%`, 
+                      `${20 + (i === 2 ? 80 : 40)}%`
                     ] 
                   }
-                : { height: "10%" }
+                : { height: "20%" }
             }
             transition={
               !isMuted && isPlaying
                 ? {
-                    duration: 0.4 + Math.random() * 0.4,
+                    duration: 0.6 + Math.random() * 0.4,
                     repeat: Infinity,
-                    repeatType: "reverse",
+                    repeatType: "mirror",
                     ease: "easeInOut",
-                    delay: i * 0.05
+                    delay: i * 0.12
                   }
                 : { duration: 0.3 }
             }
@@ -61,17 +54,11 @@ const MusicVisualizer: React.FC<MusicVisualizerProps> = ({ isPlaying, isMuted, o
         ))}
       </div>
 
-      {/* Label / Status with Amplified Chromatic Aberration for Technicolor */}
-      <div className="mt-2 text-[1.4vh] font-bold tracking-[0.2em] uppercase relative">
-        {isTechnicolor ? (
-          <div className="relative">
-             <span className="absolute inset-0 text-red-500 translate-x-[2px] translate-y-[1.5px] blur-[0.4px] opacity-90">{statusLabel}</span>
-             <span className="absolute inset-0 text-cyan-400 -translate-x-[2px] -translate-y-[1.5px] blur-[0.4px] opacity-90">{statusLabel}</span>
-             <span className="relative text-white drop-shadow-[0_0_10px_white]">{statusLabel}</span>
-          </div>
-        ) : (
-          <span className="text-[#00ff00] crt-glow">{statusLabel}</span>
-        )}
+      {/* Ultra-minimal Center Label */}
+      <div className="mt-1 flex flex-col items-center">
+          <span className={`text-[0.7vh] font-medium tracking-[0.4em] uppercase ${isMuted ? 'text-white/20' : 'text-white/40'}`}>
+              {statusLabel}
+          </span>
       </div>
     </div>
   );

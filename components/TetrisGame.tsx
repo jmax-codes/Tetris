@@ -79,6 +79,7 @@ const TetrisGame: React.FC = () => {
   const [dropTime, setDropTime] = useState<number | null>(INITIAL_SPEED);
   const [audioInitialized, setAudioInitialized] = useState(false);
   const isProcessingRef = React.useRef(false); // Debounce ref
+  const lastActionTimeRef = React.useRef<number>(0);
   const hardDropTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const prevGameOverRef = React.useRef(false); // Track previous game over state
   
@@ -614,7 +615,7 @@ const TetrisGame: React.FC = () => {
   const cellHeight = isTechnicolor ? "3.36vh" : "2.8vh"; 
   const cellWidth = "3.36vh"; // Fixed width to keep container stable
   
-  const containerHeight = "67.2vh"; 
+  const containerHeight = isMobile ? "60vh" : "67.2vh"; 
   const containerWidth = "33.6vh"; 
 
   // --- Theme Helpers ---
@@ -653,11 +654,25 @@ const TetrisGame: React.FC = () => {
   };
 
   const getBorderChar = (side: 'left' | 'right') => {
-    if (gameState.theme === 'electronika') {
-        return side === 'left' ? '<!' : '!>';
-    }
-    return '*'; // Technicolor star border
+     if (gameState.theme === 'electronika') {
+         return side === 'left' ? '<!' : '!>';
+     }
+     return '*'; // Technicolor star border
   };
+
+  // Helper to prevent double-firing on mobile
+  const handleControlAction = useCallback((action: () => void) => (e: React.PointerEvent | React.TouchEvent | React.MouseEvent) => {
+    // Prevent default browser behavior (scrolling/zooming/emulated clicks)
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+
+    const now = Date.now();
+    // 60ms threshold to block accidental double-triggering
+    if (now - lastActionTimeRef.current < 60) return;
+    lastActionTimeRef.current = now;
+
+    action();
+  }, []);
 
   const mainTextColor = isTechnicolor ? 'text-white' : 'text-[#00ff00]';
   const glowClass = isTechnicolor ? 'drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]' : 'crt-glow';
@@ -681,7 +696,7 @@ const TetrisGame: React.FC = () => {
            <div className="absolute inset-0 flicker pointer-events-none z-0 opacity-5"></div>
 
            {/* --- TOP SECTION (THE SCREEN) --- */}
-           <div className="flex-none h-[67vh] flex flex-col w-full px-2 pt-2 relative">
+           <div className="flex-none h-[60vh] flex flex-col w-full px-2 pt-2 relative">
                
                 {/* 1. Header (Title & Subtitle) - Fixed Height to prevent shift */}
                 <div className="flex-none flex flex-col items-center justify-center h-[7vh] mb-1 shrink-0">
@@ -712,12 +727,12 @@ const TetrisGame: React.FC = () => {
                <div className="flex-1 flex flex-row items-stretch justify-center gap-1 overflow-hidden">
                    
                    {/* COLUMN 1: LEFT (Stats, Icons, Nav) */}
-                   <div className="flex flex-col w-[22%] items-start justify-start pt-2 gap-2">
+                   <div className="flex flex-col flex-1 items-start justify-start pt-2 gap-2">
                        {/* Stats Group */}
                        <div className="w-full flex flex-col gap-2">
                             <div className={`border-b ${isTechnicolor ? 'border-cyan-500/50' : 'border-[#00ff00]/30'} pb-0.5 mb-1`}>
                                 <span className={`${isTechnicolor ? 'bg-cyan-500/20 text-cyan-400' : 'bg-[#00ff00]/10 text-[#00ff00]'} px-1 py-0.5 text-[1.2vh] font-bold tracking-wider`}>
-                                    {isTechnicolor ? 'STATISTICS' : 'STATS'}
+                                    STATS
                                 </span>
                             </div>
                             
@@ -739,34 +754,55 @@ const TetrisGame: React.FC = () => {
                             </div>
                        </div>
 
-                       {/* Computer & Floppy Icons with Animation - BIGGER */ }
-                       <motion.div 
-                           initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                           animate={{ opacity: 0.8, scale: 1, y: 0 }}
-                           transition={{ delay: 0.2, duration: 0.5 }}
-                           className={`flex flex-col gap-1 items-center justify-center mt-2 w-full ${isTechnicolor ? 'drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]' : ''}`}
-                       >
-                           <motion.img 
-                               src="/assets/computer.png" 
-                               whileTap={{ scale: 0.9 }}
-                               animate={{ filter: isTechnicolor ? 'brightness(1.1) contrast(1.1)' : ['brightness(0.75) grayscale(100%)', 'brightness(0.85) grayscale(80%)', 'brightness(0.75) grayscale(100%)'] }}
-                               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                               className="w-[8vh] h-[8vh] object-contain" 
-                               alt="PC" 
-                            />
-                           <motion.img 
-                               src="/assets/floppy.png" 
-                               whileTap={{ scale: 0.9, rotate: -10 }}
-                               className={`w-[5vh] h-[5vh] object-contain ${isTechnicolor ? 'brightness-110' : 'filter grayscale brightness-75'}`} 
-                               alt="Disk" 
-                            />
+                                                                       <motion.div 
+                            initial={{ opacity: 0, scale: 0.8, y: 15 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            transition={{ delay: 0.1, duration: 0.8, ease: "circOut" }}
+                            className="flex flex-col gap-4 items-center justify-center mt-2 w-full px-1"
+                        >
+                            <motion.img 
+                                src="/assets/computer.png" 
+                                whileTap={{ scale: 0.85 }}
+                                animate={{ 
+                                    scale: isTechnicolor ? 0.75 : 1.1,
+                                    opacity: isTechnicolor ? 0.4 : 1,
+                                    filter: isTechnicolor 
+                                        ? 'brightness(1.1) contrast(1.1) drop-shadow(0 0 0px rgba(0,0,0,0))' 
+                                        : 'brightness(1.2) contrast(1.4) drop-shadow(0 0 15px rgba(0, 255, 0, 0.6))'
+                                }}
+                                transition={{ duration: 0.5 }}
+                                className="w-[6.5vh] h-[6.5vh] object-contain flex-none" 
+                                alt="PC" 
+                             />
+                            <motion.img 
+                                src="/assets/floppy.png" 
+                                whileTap={{ scale: 0.85, rotate: -12 }}
+                                animate={{ 
+                                    scale: isTechnicolor ? 1.1 : 0.75,
+                                    opacity: isTechnicolor ? 1 : 0.4,
+                                    filter: isTechnicolor 
+                                        ? 'brightness(1.1) contrast(1.1) drop-shadow(0 0 15px rgba(6, 182, 212, 0.6))' 
+                                        : 'brightness(1) contrast(1.2) drop-shadow(0 0 0px rgba(0,0,0,0))'
+                                }}
+                                transition={{ duration: 0.5 }}
+                                className="w-[4.2vh] h-[4.2vh] object-contain flex-none" 
+                                alt="Disk" 
+                             />
+                            <div className="mt-1 w-full flex justify-center">
+                               <MusicVisualizer 
+                                   isPlaying={!gameState.isPaused && !gameState.isGameOver} 
+                                   isMuted={isMuted} 
+                                   onToggle={toggleMute} 
+                                   theme={gameState.theme}
+                               />
+                            </div>
                         </motion.div>
                         
                     </div>
 
                    {/* COLUMN 2: CENTER (The GRID) */}
                    {/* COLUMN 2: CENTER (The GRID) - DESKTOP CLONE */}
-                   <div className="flex flex-col items-center justify-start flex-1 relative pt-1">
+                   <div className="flex flex-col items-center justify-start flex-none relative pt-1">
                        
                        {/* 1. Main Flex Container (Left Border | Grid | Right Border) */}
                        <div className="flex justify-center w-full">
@@ -823,11 +859,38 @@ const TetrisGame: React.FC = () => {
                                         </span>
                                     </div>
                                 )}
-                                {gameState.isGameOver && (
-                                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
-                                        <span className="text-[3vh] font-bold text-red-500 mb-2 crt-glow">GAME OVER</span>
-                                    </div>
-                                )}
+                                                                {gameState.isGameOver && (
+                                     isTechnicolor ? (
+                                         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm px-4 text-center">
+                                             <div className="flex flex-col mb-4">
+                                                 <div className="text-[5vh] leading-none font-black tracking-widest text-[#ff3333] drop-shadow-[2px_2px_0px_rgba(0,0,0,0.8)] uppercase">GAME</div>
+                                                 <div className="text-[5vh] leading-none font-black tracking-widest text-[#ff3333] drop-shadow-[2px_2px_0px_rgba(0,0,0,0.8)] uppercase">OVER</div>
+                                             </div>
+                                             <div className="text-[2.2vh] text-white font-bold mb-8 tracking-tight uppercase font-mono">SCORE: {gameState.score}</div>
+                                             <button 
+                                                 onPointerDown={handleControlAction(restartGame)}
+                                                 className="px-8 py-3 bg-gradient-to-r from-[#4f46e5] to-[#9333ea] text-white font-bold tracking-widest shadow-[0_0_15px_rgba(79,70,229,0.4)] rounded-md uppercase text-[1.6vh]"
+                                             >
+                                                 TRY AGAIN
+                                             </button>
+                                         </div>
+                                     ) : (
+                                         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-sm px-2 text-center">
+                                             <div className="flex flex-col mb-6">
+                                                 <div className="text-[4.5vh] leading-tight font-bold text-red-500 crt-glow" style={{ textShadow: '0 0 12px #00ff00' }}>GAME</div>
+                                                 <div className="text-[4.5vh] leading-tight font-bold text-red-500 crt-glow" style={{ textShadow: '0 0 12px #00ff00' }}>OVER</div>
+                                             </div>
+                                             <div className="text-[2.2vh] text-[#00ff00] font-bold mb-10 tracking-[0.2em] uppercase font-mono">SCORE: {gameState.score}</div>
+                                             <button 
+                                                 onPointerDown={handleControlAction(restartGame)}
+                                                 className="w-full max-w-[18vh] py-4 border-2 border-[#00ff00] text-[#00ff00] font-bold tracking-[0.2em] active:bg-[#00ff00]/20 transition-colors uppercase text-[1.8vh]"
+                                             >
+                                                 RESTART
+                                             </button>
+                                         </div>
+                                     )
+                                 )}
+
                            </div>
 
                            {/* Right Border Column - Fixed Width to prevent shift */}
@@ -879,7 +942,7 @@ const TetrisGame: React.FC = () => {
                     </div>
 
                    {/* COLUMN 3: RIGHT (Next, Mode) */}
-                   <div className="flex flex-col w-[22%] items-end justify-start pt-2 gap-4">
+                   <div className="flex flex-col flex-1 items-end justify-start pt-2 gap-4">
                        
                        {/* Next Pieces - BIGGER */}
                        <div className="flex flex-col items-end gap-1 w-full">
@@ -926,118 +989,111 @@ const TetrisGame: React.FC = () => {
                     </div>
                 </div>
 
-                {/* --- FOOTER ROW (HISTORY, RESTART, AUDIO) --- */}
-                <div className="flex-none flex flex-row items-end justify-center px-4 pb-2 w-full gap-2">
-                    {/* Left: Nav Buttons */}
-                    <div className="w-[25%] flex flex-col gap-1.5 pb-1">
-                        <button onClick={() => navigate('/history')} className={`${isTechnicolor ? 'bg-blue-900/40 border-blue-500/50 text-white' : 'bg-[#003300] border-[#00ff00]/40 text-[#00ff00]'} border text-[1.1vh] py-1.5 w-full font-bold shadow-lg uppercase tracking-widest`}>History</button>
-                        <button onClick={() => navigate('/movies')} className={`${isTechnicolor ? 'bg-blue-900/40 border-blue-500/50 text-white' : 'bg-[#003300] border-[#00ff00]/40 text-[#00ff00]'} border text-[1.1vh] py-1.5 w-full font-bold shadow-lg uppercase tracking-widest`}>Movies</button>
-                    </div>
-
-                    {/* Center: Restart Button */}
-                    <div className="flex-1 flex justify-center pb-1">
-                        <button onClick={restartGame} className={`text-[1.4vh] border-2 ${isTechnicolor ? 'border-blue-500/60 text-white bg-blue-950/40' : 'border-[#00ff00]/50 text-[#00ff00]'} px-6 py-2 hover:brightness-125 transition-all font-black uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(59,130,246,0.2)]`}>
-                             {isTechnicolor ? '[ TRY AGAIN ]' : '[ RESTART SYSTEM ]'}
-                        </button>
-                    </div>
-
-                    {/* Right: Audio Visualizer */}
-                    <div className="w-[25%] flex justify-end">
-                        <MusicVisualizer 
-                            isPlaying={!gameState.isPaused && !gameState.isGameOver} 
-                            isMuted={isMuted} 
-                            onToggle={toggleMute} 
-                            theme={gameState.theme}
-                        />
-                    </div>
-                </div>
+                {/* Compact Footer */}
+                <div className="flex-none h-2 w-full"></div>
             </div>
 
            {/* --- BOTTOM SECTION (CONTROLS) --- */}
-           <div className="flex-none h-[36vh] relative bg-gradient-to-t from-[#151515] to-transparent z-20">
+           <div className="flex-none h-[40vh] relative bg-gradient-to-t from-[#151515] to-transparent z-20">
                
                <div className="h-full w-full max-w-lg mx-auto grid grid-cols-3 relative px-2 pb-4">
                    
                      {/* Left: D-Pad - Console Style */}
-                     <div className="flex items-start justify-start pl-4 pt-8">
-                        <div className="relative w-[15vh] h-[15vh]">
+                     <div className="flex items-start justify-start pl-4 pt-[4vh]">
+                        <div className="relative w-[12vh] h-[12vh]">
                             {/* D-Pad Background Cross */}
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="w-[4.8vh] h-[15vh] bg-[#222] rounded-md shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"></div>
-                                <div className="w-[15vh] h-[4.8vh] bg-[#222] rounded-md absolute shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"></div>
+                                <div className="w-[3.8vh] h-[12vh] bg-[#222] rounded-md shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"></div>
+                                <div className="w-[12vh] h-[3.8vh] bg-[#222] rounded-md absolute shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"></div>
                             </div>
                             
                             {/* Up - Hard Drop */}
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[4.8vh] h-[5.2vh] bg-[#2a2a2a] active:bg-[#111] rounded-t-md flex items-center justify-center active:scale-95 shadow-lg border-t border-x border-gray-600/20"
-                                 onTouchStart={(e) => { e.preventDefault(); hardDrop(); }}
-                                 onClick={(e) => { e.preventDefault(); hardDrop(); }}>
-                                <span className="text-[0.8vh] font-bold text-gray-500 uppercase tracking-tighter">Hard</span>
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[3.8vh] h-[4.2vh] bg-[#2a2a2a] active:bg-[#111] rounded-t-md flex items-center justify-center active:scale-95 shadow-lg border-t border-x border-gray-600/20"
+                                 onPointerDown={handleControlAction(hardDrop)}>
+                                <span className="text-[0.7vh] font-bold text-gray-500 uppercase tracking-tighter">Hard</span>
                             </div>
                             
                             {/* Down - Soft Drop */}
-                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[4.8vh] h-[5.2vh] bg-[#2a2a2a] active:bg-[#111] rounded-b-md flex items-center justify-center active:scale-95 shadow-lg border-b border-x border-gray-600/20"
-                                 onTouchStart={(e) => { e.preventDefault(); drop(); }}
-                                 onClick={(e) => { e.preventDefault(); drop(); }}>
-                                 <span className="text-[2vh] text-gray-400">▼</span>
+                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[3.8vh] h-[4.2vh] bg-[#2a2a2a] active:bg-[#111] rounded-b-md flex items-center justify-center active:scale-95 shadow-lg border-b border-x border-gray-600/20"
+                                 onPointerDown={handleControlAction(drop)}>
+                                 <span className="text-[1.8vh] text-gray-400">▼</span>
                             </div>
 
                             {/* Left */}
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[5.2vh] h-[4.8vh] bg-[#2a2a2a] active:bg-[#111] rounded-l-md flex items-center justify-center active:scale-95 shadow-lg border-y border-l border-gray-600/20"
-                                 onTouchStart={(e) => { e.preventDefault(); move(-1); }}
-                                 onClick={(e) => { e.preventDefault(); move(-1); }}>
-                                 <span className="text-[2vh] text-gray-400">◀</span>
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[4.2vh] h-[3.8vh] bg-[#2a2a2a] active:bg-[#111] rounded-l-md flex items-center justify-center active:scale-95 shadow-lg border-y border-l border-gray-600/20"
+                                 onPointerDown={handleControlAction(() => move(-1))}>
+                                 <span className="text-[1.8vh] text-gray-400">◀</span>
                             </div>
 
                             {/* Right */}
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[5.2vh] h-[4.8vh] bg-[#2a2a2a] active:bg-[#111] rounded-r-md flex items-center justify-center active:scale-95 shadow-lg border-y border-r border-gray-600/20"
-                                 onTouchStart={(e) => { e.preventDefault(); move(1); }}
-                                 onClick={(e) => { e.preventDefault(); move(1); }}>
-                                 <span className="text-[2vh] text-gray-400">▶</span>
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[4.2vh] h-[3.8vh] bg-[#2a2a2a] active:bg-[#111] rounded-r-md flex items-center justify-center active:scale-95 shadow-lg border-y border-r border-gray-600/20"
+                                 onPointerDown={handleControlAction(() => move(1))}>
+                                 <span className="text-[1.8vh] text-gray-400">▶</span>
                             </div>
 
                             {/* Center indentation */}
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3.5vh] h-[3.5vh] bg-[#1a1a1a] rounded-full shadow-[inset_0_0_5px_black]"></div>
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[2.8vh] h-[2.8vh] bg-[#1a1a1a] rounded-full shadow-[inset_0_0_5px_black]"></div>
                         </div>
                     </div>
 
-                    {/* Center: Select/Start Pill Buttons */}
-                    <div className="flex flex-col items-center justify-end pb-6">
-                         <div className="flex gap-6 transform rotate-[-25deg]">
+                     {/* Center: Special Buttons & Select/Start Pill Buttons */}
+                    <div className="flex flex-col items-center justify-start pt-[2vh] gap-7">
+                         {/* Special Feature Buttons - Hardware Circle Style */}
+                         <div className="flex gap-4 select-none">
+                             <div className="flex flex-col items-center gap-2">
+                                 <button 
+                                     onClick={() => navigate('/history')}
+                                     onPointerDown={handleControlAction(() => navigate('/history'))}
+                                     className={`w-[4.8vh] h-[4.8vh] rounded-full transition-all active:scale-90 touch-none border-2 shadow-lg ${isTechnicolor ? 'bg-[#222b35] border-cyan-400/40 shadow-cyan-900/20' : 'bg-[#1a221a] border-[#00ff00]/40 shadow-green-900/20'}`}
+                                 >
+                                 </button>
+                                 <span className={`text-[0.9vh] font-bold tracking-[0.1em] uppercase ${isTechnicolor ? 'text-cyan-400/70' : 'text-[#00ff00]/70 font-mono'}`}>HISTORY</span>
+                             </div>
+                             <div className="flex flex-col items-center gap-2">
+                                 <button 
+                                     onClick={() => navigate('/movies')}
+                                     onPointerDown={handleControlAction(() => navigate('/movies'))}
+                                     className={`w-[4.8vh] h-[4.8vh] rounded-full transition-all active:scale-90 touch-none border-2 shadow-lg ${isTechnicolor ? 'bg-[#2b2235] border-purple-400/40 shadow-purple-900/20' : 'bg-[#1a221a] border-[#00ff00]/40 shadow-green-900/20'}`}
+                                 >
+                                 </button>
+                                 <span className={`text-[0.9vh] font-bold tracking-[0.1em] uppercase ${isTechnicolor ? 'text-purple-400/70' : 'text-[#00ff00]/70 font-mono'}`}>MOVIES</span>
+                             </div>
+                         </div>
+
+                         <div className="flex gap-3 transform rotate-[-25deg] mt-2">
                              <div className="flex flex-col items-center gap-1">
-                                 <button className="w-14 h-5 rounded-full bg-[#3a3a3a] border-b-4 border-[#1a1a1a] active:border-b-0 active:translate-y-[2px] shadow-xl"
-                                      onClick={() => setGameState(prev => ({ ...prev, isPaused: !prev.isPaused }))}></button>
-                                 <span className="text-[0.9vh] font-black text-gray-500 tracking-widest uppercase">Select</span>
+                                 <button className="w-9 h-3 rounded-full bg-[#3a3a3a] border-b-2 border-[#1a1a1a] active:border-b-0 active:translate-y-[1px] shadow-lg"
+                                      onPointerDown={handleControlAction(() => setGameState(prev => ({ ...prev, isPaused: !prev.isPaused })))}></button>
+                                 <span className="text-[0.7vh] font-black text-gray-500 tracking-widest uppercase">Select</span>
                              </div>
                              <div className="flex flex-col items-center gap-1">
-                                 <button className="w-14 h-5 rounded-full bg-[#3a3a3a] border-b-4 border-[#1a1a1a] active:border-b-0 active:translate-y-[2px] shadow-xl"
-                                      onClick={restartGame}></button>
-                                 <span className="text-[0.9vh] font-black text-gray-500 tracking-widest uppercase">Start</span>
+                                 <button className="w-9 h-3 rounded-full bg-[#3a3a3a] border-b-2 border-[#1a1a1a] active:border-b-0 active:translate-y-[1px] shadow-lg"
+                                      onPointerDown={handleControlAction(restartGame)}></button>
+                                 <span className="text-[0.7vh] font-black text-gray-500 tracking-widest uppercase">Start</span>
                              </div>
                          </div>
                     </div>
 
                     {/* Right: A/B Buttons - Red Circles Staggered */}
-                    <div className="flex items-start justify-end pr-4 pt-8">
-                        <div className="relative w-[18vh] h-[15vh]">
+                    <div className="flex items-start justify-end pr-4 pt-[1.25vh]">
+                        <div className="relative w-[16vh] h-[12vh]">
                             {/* B Button (Left/Lower) */}
                             <div className="absolute left-0 bottom-0 flex flex-col items-center group">
                                 <button 
-                                    className="w-[8vh] h-[8vh] rounded-full bg-[#a31a34] border-b-4 border-[#6b1122] active:border-b-0 active:translate-y-1 shadow-[0_5px_15px_rgba(0,0,0,0.5)] flex items-center justify-center"
-                                    onTouchStart={(e) => { e.preventDefault(); handleRotateCCW(); }}
-                                    onClick={(e) => { e.preventDefault(); handleRotateCCW(); }}
+                                    className="w-[6.5vh] h-[6.5vh] rounded-full bg-[#a31a34] border-b-4 border-[#6b1122] active:border-b-0 active:translate-y-1 shadow-[0_5px_15px_rgba(0,0,0,0.5)] flex items-center justify-center"
+                                    onPointerDown={handleControlAction(handleRotateCCW)}
                                 >
-                                    <span className="text-[3vh] font-black text-white/50">B</span>
+                                    <span className="text-[2.5vh] font-black text-white/50">B</span>
                                 </button>
                             </div>
 
                             {/* A Button (Right/Higher) */}
                             <div className="absolute right-0 top-0 flex flex-col items-center group">
                                 <button 
-                                    className="w-[8vh] h-[8vh] rounded-full bg-[#a31a34] border-b-4 border-[#6b1122] active:border-b-0 active:translate-y-1 shadow-[0_5px_15px_rgba(0,0,0,0.5)] flex items-center justify-center"
-                                    onTouchStart={(e) => { e.preventDefault(); handleRotate(); }}
-                                    onClick={(e) => { e.preventDefault(); handleRotate(); }}
+                                    className="w-[6.5vh] h-[6.5vh] rounded-full bg-[#a31a34] border-b-4 border-[#6b1122] active:border-b-0 active:translate-y-1 shadow-[0_5px_15px_rgba(0,0,0,0.5)] flex items-center justify-center"
+                                    onPointerDown={handleControlAction(handleRotate)}
                                 >
-                                    <span className="text-[3vh] font-black text-white/50">A</span>
+                                    <span className="text-[2.5vh] font-black text-white/50">A</span>
                                 </button>
                             </div>
                         </div>
@@ -1446,7 +1502,7 @@ const TetrisGame: React.FC = () => {
               {/* TECHNICOLOR: PIECE STATISTICS */}
               {isTechnicolor && (
                 <>
-                    <h2 className="text-center text-[2.8vh] mb-[2.5vh] font-bold uppercase tracking-[0.2em]" 
+                    <h2 className="text-center text-[2.8vh] mb-[1.5vh] font-bold uppercase tracking-[0.2em]" 
                         style={{ 
                             fontFamily: 'monospace',
                             background: 'repeating-linear-gradient(to bottom, #ffffff 0%, #ffffff 50%, #555555 50%, #555555 100%)',
@@ -1459,6 +1515,24 @@ const TetrisGame: React.FC = () => {
                         }}>
                         STATISTICS
                     </h2>
+
+                    {/* Technicolor Special Buttons - Circle Style */}
+                    <div className="flex justify-center gap-[1.5vh] mb-[3vh] px-1 mt-[1vh]">
+                        <div className="flex flex-col items-center gap-2">
+                            <button 
+                                onClick={() => navigate('/history')}
+                                className="w-[5vh] h-[5vh] rounded-full bg-[#222b35] border-2 border-cyan-400/50 shadow-lg shadow-cyan-900/40 active:scale-95 transition-all"
+                            ></button>
+                            <span className="text-[1.1vh] font-black italic text-cyan-400/80 tracking-widest">HISTORY</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-2">
+                            <button 
+                                onClick={() => navigate('/movies')}
+                                className="w-[5vh] h-[5vh] rounded-full bg-[#2b2235] border-2 border-purple-400/50 shadow-lg shadow-purple-900/40 active:scale-95 transition-all"
+                            ></button>
+                            <span className="text-[1.1vh] font-black italic text-purple-400/80 tracking-widest">MOVIES</span>
+                        </div>
+                    </div>
                     
                     <div className="flex-1 flex flex-col justify-between py-1">
                         <div className="flex flex-col gap-[1.8vh] justify-start px-2">
@@ -1505,11 +1579,12 @@ const TetrisGame: React.FC = () => {
                         )})}
                         </div>
                         
-                        <div className="border-t border-white/10 mt-[3.1vh] pt-2 flex justify-between px-4 font-bold text-[2vh] font-mono">
+                        <div className="border-t border-white/10 mt-[3.1vh] pt-2 flex justify-between px-4 font-bold text-[2vh] font-mono mb-[1.5vh]">
                             <span className="text-gray-400">Σ </span>
                             <span>:</span>
                             <span className="text-white text-[2.2vh]">{Object.values(gameState.pieceStats).reduce((a: number, b: number) => a + b, 0)}</span>
                         </div>
+
                         
                         {/* Visualizer for Technicolor - Below Statistics */}
                         <div className="mt-auto border-t border-white/10 pt-[1.5vh] pb-[2.2vh]">
@@ -1527,7 +1602,25 @@ const TetrisGame: React.FC = () => {
               {/* ELECTRONIKA: CONTROLS REFERENCE */}
               {!isTechnicolor && (
                 <>
-                    <h2 className="text-center text-[2.8vh] mb-[2.5vh] crt-glow border-b border-[#00ff00]/40 pb-[1.2vh] tracking-[0.2em] font-bold uppercase leading-none">CONTROLS</h2>
+                     <h2 className="text-center text-[2.8vh] mb-[1.5vh] crt-glow border-b border-[#00ff00]/40 pb-[1.2vh] tracking-[0.2em] font-bold uppercase leading-none">CONTROLS</h2>
+                    
+                     {/* Electronika Special Buttons - Hardware Circle Style */}
+                    <div className="flex justify-center gap-[1.5vh] mb-[3vh] w-full px-2 mt-[1vh]">
+                        <div className="flex flex-col items-center gap-2">
+                            <button 
+                                onClick={() => navigate('/history')}
+                                className="w-[5vh] h-[5vh] rounded-full bg-[#1a221a] border-2 border-[#00ff00]/40 shadow-lg shadow-green-950/50 active:scale-95 transition-all crt-glow"
+                            ></button>
+                            <span className="text-[1.1vh] font-mono font-bold text-[#00ff00]/70 tracking-[0.2em]">HISTORY</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-2">
+                            <button 
+                                onClick={() => navigate('/movies')}
+                                className="w-[5vh] h-[5vh] rounded-full bg-[#1a221a] border-2 border-[#00ff00]/40 shadow-lg shadow-green-950/50 active:scale-95 transition-all crt-glow"
+                            ></button>
+                            <span className="text-[1.1vh] font-mono font-bold text-[#00ff00]/70 tracking-[0.2em]">MOVIES</span>
+                        </div>
+                    </div>
                     <div className="flex-1 flex flex-col justify-between py-1">
                         <div className="space-y-[1.8vh]">
                         <p className="text-[1.8vh] opacity-40 tracking-[0.3em] font-bold uppercase">NAVIGATION:</p>
@@ -1557,6 +1650,7 @@ const TetrisGame: React.FC = () => {
                             <span className="hover:opacity-100 cursor-pointer px-[0.5vh] transition-all">[P] PAUSE</span>
                             <span className="hover:opacity-100 cursor-pointer px-[0.5vh] transition-all">[R] RESET</span>
                         </div>
+
 
                         {/* Visualizer for Electronika - Inside Controls Stack */}
                         <div className="mt-auto border-t border-[#00ff00]/20 pt-[1.5vh] pb-[2.2vh]">
