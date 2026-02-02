@@ -8,10 +8,10 @@ import { gsap } from 'gsap';
 import { useNavigate } from 'react-router-dom';
 import MusicVisualizer from './MusicVisualizer';
 
-const getRows = (theme: 'electronika' | 'technicolor') => theme === 'electronika' ? 24 : 20;
+const getRows = (theme: 'electronika' | 'technicolor', isMobile: boolean) => (theme === 'electronika' && !isMobile) ? 24 : 20;
 
-const createEmptyGrid = (theme: 'electronika' | 'technicolor' = 'electronika'): Grid => {
-  const rows = getRows(theme);
+const createEmptyGrid = (theme: 'electronika' | 'technicolor' = 'electronika', isMobile: boolean = false): Grid => {
+  const rows = getRows(theme, isMobile);
   return Array.from({ length: rows }, () => Array(COLS).fill(null));
 };
 
@@ -22,45 +22,58 @@ const getRandomPiece = (): PieceType => {
 
 const TetrisGame: React.FC = () => {
   const navigate = useNavigate();
-  const [gameState, setGameState] = useState<GameState>({
-    grid: createEmptyGrid(),
-    activePiece: null,
-    nextPiece: getRandomPiece(),
-    score: 0,
-    level: 1,
-    lines: 0,
-    isPaused: false,
-    isGameOver: false,
-    theme: 'electronika',
-    pieceStats: { I: 0, J: 0, L: 0, O: 0, S: 0, T: 0, Z: 0 },
-  });
+  /* INITIALIZATION HELPER */
+  const getInitialState = (): GameState => {
+      let theme: 'electronika' | 'technicolor' = 'electronika';
+      let mobileInitially = false;
+      try {
+          if (typeof window !== 'undefined') {
+              const stored = localStorage.getItem('tetris-theme');
+              if (stored === 'electronika' || stored === 'technicolor') {
+                  theme = stored;
+              }
+              mobileInitially = window.innerWidth <= 768;
+          }
+      } catch (e) {
+          console.warn('LocalStorage access failed', e);
+      }
+
+      return {
+          grid: createEmptyGrid(theme, mobileInitially),
+          activePiece: null,
+          nextPieces: [getRandomPiece(), getRandomPiece(), getRandomPiece()],
+          score: 0,
+          level: 1,
+          lines: 0,
+          isPaused: false,
+          isGameOver: false,
+          theme,
+          pieceStats: { I: 0, J: 0, L: 0, O: 0, S: 0, T: 0, Z: 0 },
+      };
+  };
+
+  const [gameState, setGameState] = useState<GameState>(getInitialState);
 
   const [isMuted, setIsMuted] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+      if (typeof window !== 'undefined') {
+          return window.innerWidth <= 768;
+      }
+      return false;
+  });
 
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768);
     };
-    checkMobile();
+    // Initial check is handled by state initializer, but we keep listener
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Re-use logic for reset
   const initGame = useCallback(() => {
-    const theme = localStorage.getItem('tetris-theme') as 'electronika' | 'technicolor' || 'electronika';
-    return {
-      grid: createEmptyGrid(theme),
-      activePiece: null,
-      nextPiece: getRandomPiece(),
-      score: 0,
-      level: 1,
-      lines: 0,
-      isPaused: false,
-      isGameOver: false,
-      theme,
-      pieceStats: { 'I': 0, 'J': 0, 'L': 0, 'O': 0, 'S': 0, 'T': 0, 'Z': 0 }
-    };
+     return getInitialState();
   }, []);
 
   const [dropTime, setDropTime] = useState<number | null>(INITIAL_SPEED);
@@ -294,13 +307,15 @@ const TetrisGame: React.FC = () => {
       const newScore = prev.score + (basePoints[linesCleared] * (prev.level + 1));
 
       // Atomic spawn logic
-      const nextType = prev.nextPiece;
+      const nextType = prev.nextPieces[0];
       const nextShape = PIECES[nextType];
       const nextActivePiece: Piece = {
         type: nextType,
         shape: nextShape,
         position: { x: Math.floor(COLS / 2) - Math.floor(nextShape[0].length / 2), y: 0 },
       };
+
+      const newNextPieces = [...prev.nextPieces.slice(1), getRandomPiece()];
 
       if (checkCollision(nextActivePiece, filteredGrid)) {
         return {
@@ -310,7 +325,8 @@ const TetrisGame: React.FC = () => {
           isGameOver: true,
           score: newScore,
           lines: newLines,
-          level: newLevel
+          level: newLevel,
+          nextPieces: newNextPieces
         };
       }
 
@@ -318,7 +334,7 @@ const TetrisGame: React.FC = () => {
         ...prev,
         grid: filteredGrid,
         activePiece: nextActivePiece,
-        nextPiece: getRandomPiece(),
+        nextPieces: newNextPieces,
         score: newScore,
         lines: newLines,
         level: newLevel,
@@ -328,7 +344,7 @@ const TetrisGame: React.FC = () => {
   }, [checkCollision]);
 
   const spawnPiece = useCallback(() => {
-    const type = gameState.nextPiece;
+    const type = gameState.nextPieces[0];
     const shape = PIECES[type];
     const newPiece: Piece = {
       type,
@@ -343,10 +359,10 @@ const TetrisGame: React.FC = () => {
         return {
             ...prev,
             activePiece: newPiece,
-            nextPiece: getRandomPiece()
+            nextPieces: [...prev.nextPieces.slice(1), getRandomPiece()]
         }
     });
-  }, [gameState.nextPiece, gameState.grid]);
+  }, [gameState.nextPieces, gameState.grid]);
 
   const drop = useCallback(() => {
     if (!gameState.activePiece || gameState.isPaused || gameState.isGameOver || isProcessingRef.current) return;
@@ -415,13 +431,14 @@ const TetrisGame: React.FC = () => {
       const newScore = prev.score + (basePoints[linesCleared] * (prev.level + 1));
 
       // 5. Atomic spawn logic
-      const nextType = prev.nextPiece;
+      const nextType = prev.nextPieces[0];
       const nextShape = PIECES[nextType];
       const nextActivePiece: Piece = {
         type: nextType,
         shape: nextShape,
         position: { x: Math.floor(COLS / 2) - Math.floor(nextShape[0].length / 2), y: 0 },
       };
+      const newNextPieces = [...prev.nextPieces.slice(1), getRandomPiece()];
 
       const isGameOver = checkCollision(nextActivePiece, filteredGrid);
 
@@ -429,7 +446,7 @@ const TetrisGame: React.FC = () => {
         ...prev,
         grid: filteredGrid,
         activePiece: isGameOver ? null : nextActivePiece,
-        nextPiece: isGameOver ? prev.nextPiece : getRandomPiece(),
+        nextPieces: isGameOver ? prev.nextPieces : newNextPieces,
         score: newScore,
         lines: newLines,
         level: newLevel,
@@ -446,6 +463,21 @@ const TetrisGame: React.FC = () => {
     if (!gameState.activePiece || gameState.isPaused || gameState.isGameOver) return;
     const rotateShape = (shape: number[][]) => shape[0].map((_, index) => shape.map(col => col[index]).reverse());
     const rotatedShape = rotateShape(gameState.activePiece.shape);
+    const rotatedPiece = { ...gameState.activePiece, shape: rotatedShape };
+    
+    if (!checkCollision(rotatedPiece, gameState.grid)) {
+      setGameState(prev => ({ ...prev, activePiece: rotatedPiece }));
+    }
+  };
+
+  const handleRotateCCW = () => {
+    if (!gameState.activePiece || gameState.isPaused || gameState.isGameOver) return;
+    const rotateShapeCCW = (shape: number[][]) => {
+        // Transpose and then reverse rows (or 3 right rotations)
+        // Easier: reverse columns then transpose
+        return shape[0].map((_, index) => shape.map(col => col[col.length - 1 - index]));
+    };
+    const rotatedShape = rotateShapeCCW(gameState.activePiece.shape);
     const rotatedPiece = { ...gameState.activePiece, shape: rotatedShape };
     
     if (!checkCollision(rotatedPiece, gameState.grid)) {
@@ -496,9 +528,9 @@ const TetrisGame: React.FC = () => {
       }
 
       switch (e.key.toLowerCase()) {
-        case 'arrowleft': case 'a': case '7': move(-1); break;
-        case 'arrowright': case 'd': case '9': move(1); break;
-        case 'arrowdown': case 's': case '4': drop(); break;
+        case 'arrowleft': case 'a': case '7': case '4': move(-1); break;
+        case 'arrowright': case 'd': case '9': case '6': move(1); break;
+        case 'arrowdown': case 's': case '2': drop(); break;
         case 'arrowup': case 'w': case '8': handleRotate(); break;
         case ' ': case '5': 
             isProcessingRef.current = true;
@@ -526,9 +558,10 @@ const TetrisGame: React.FC = () => {
     isProcessingRef.current = false;
     
     setGameState(prev => ({
-      grid: createEmptyGrid(prev.theme),
+      ...prev,
+      grid: createEmptyGrid(prev.theme, isMobile),
       activePiece: null,
-      nextPiece: getRandomPiece(),
+      nextPieces: [getRandomPiece(), getRandomPiece(), getRandomPiece()],
       score: 0,
       level: 1,
       lines: 0,
@@ -592,9 +625,9 @@ const TetrisGame: React.FC = () => {
         return {
             ...prev,
             theme,
-            grid: createEmptyGrid(theme),
+            grid: createEmptyGrid(theme, isMobile),
             activePiece: null,
-            nextPiece: getRandomPiece(),
+            nextPieces: [getRandomPiece(), getRandomPiece(), getRandomPiece()],
             score: 0,
             level: 1,
             lines: 0,
@@ -640,148 +673,378 @@ const TetrisGame: React.FC = () => {
   return (
     <>
       {isMobile ? (
-        <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center overflow-hidden select-none touch-none z-[1000]">
-          <div className={`gameboy-container transition-colors duration-500 ${isTechnicolor ? 'bg-[#2a2a2e] border-[#1a1a1e]' : 'bg-[#d1d2d4] border-[#a0a1a3]'}`}>
-            {/* Top Speaker/Status */}
-            <div className="flex justify-between px-4 mb-1 mt-1">
-              <div className={`w-16 h-1 rounded transition-colors ${isTechnicolor ? 'bg-gray-600' : 'bg-gray-400'}`}></div>
-              <div className="flex gap-1 items-center">
-                  <div className={`w-2 h-2 rounded-full animate-pulse ${isTechnicolor ? 'bg-cyan-500 shadow-[0_0_8px_cyan]' : 'bg-red-600 shadow-[0_0_5px_red]'}`}></div>
-                  <span className={`text-[8px] font-black uppercase tracking-tighter transition-colors ${isTechnicolor ? 'text-cyan-500/70' : 'text-gray-500'}`}>Battery</span>
-              </div>
-            </div>
 
-            {/* Screen Section */}
-            <div className="gameboy-screen-wrapper">
-              <div className={`gameboy-screen-inner ${!isTechnicolor ? 'brightness-90 contrast-125' : ''}`} style={gbScreenStyle}>
-                {/* Scanlines Effect for Mobile Screen */}
-                <div className="absolute inset-0 crt-scanline pointer-events-none z-10 opacity-10"></div>
-                
-                <div className="p-1 h-full flex flex-col items-center">
-                   {/* Mini Header for Mobile */}
-                   <div className="w-full flex justify-between items-center mb-0.5 px-1">
-                      <div className="text-[9px] font-bold">
-                          <div>SCORE</div>
-                          <div className="text-[11px] leading-none">{gameState.score.toString().padStart(6, '0')}</div>
-                      </div>
-                      <div className="flex gap-2 text-[9px] font-bold">
-                          <div>LV: {gameState.level}</div>
-                          <div>LINES: {gameState.lines}</div>
-                   </div>
-                   </div>
+        <div className={`fixed inset-0 bg-black overflow-hidden flex flex-col ${mainTextColor} font-mono select-none touch-none z-[1000]`}>
+           {/* Mobile Background Effects */}
+           <div className="absolute inset-0 crt-scanline pointer-events-none z-0 opacity-20"></div>
+           <div className="absolute inset-0 crt-dots pointer-events-none z-0 opacity-10"></div>
+           <div className="absolute inset-0 flicker pointer-events-none z-0 opacity-5"></div>
 
-                   {/* Grid for Mobile */}
-                   <div className="relative border-2 border-black/20 flex-1 w-full bg-black/5 flex flex-col items-center justify-center overflow-hidden">
-                      {renderedGrid.map((row, y) => (
-                          <div key={y} className="flex h-[4%]">
-                            {row.map((cell, x) => (
-                              <div key={x} 
-                                    className={`w-[12px] h-[12px] flex items-center justify-center border-t border-l border-black/5
-                                        ${!cell && isTechnicolor ? 'bg-blue-900/10' : ''}
-                                     `}>
-                                {cell && (
-                                  <div className={`w-full h-full ${isTechnicolor ? getPieceColorClass(cell) : 'bg-black'} border border-black/20 shadow-[inset_0_0_2px_rgba(255,255,255,0.3)]`}></div>
-                                )}
-                                {!cell && !isTechnicolor && (
-                                  <div className="w-[1px] h-[1px] bg-black/20 rounded-full"></div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ))}
+           {/* --- TOP SECTION (THE SCREEN) --- */}
+           <div className="flex-none h-[67vh] flex flex-col w-full px-2 pt-2 relative">
+               
+                {/* 1. Header (Title & Subtitle) - Fixed Height to prevent shift */}
+                <div className="flex-none flex flex-col items-center justify-center h-[7vh] mb-1 shrink-0">
+                    {isTechnicolor ? (
+                        <>
+                            <h1 className="text-[4.8vh] leading-none font-black italic relative inline-block transform -skew-x-12">
+                                <span className="absolute inset-0 text-red-500 translate-x-[2px] translate-y-[1px] blur-[0.5px] opacity-80">TETRIS</span>
+                                <span className="absolute inset-0 text-cyan-400 -translate-x-[2px] -translate-y-[1px] blur-[0.5px] opacity-80">TETRIS</span>
+                                <span className="relative text-white drop-shadow-[0_0_10px_white] bg-[repeating-linear-gradient(0deg,rgba(255,255,255,1)_0px,rgba(255,255,255,1)_2px,rgba(255,255,255,0.4)_2px,rgba(255,255,255,0.4)_4px)] bg-clip-text text-transparent">TETRIS</span>
+                            </h1>
+                            <div className="text-[1.3vh] leading-tight font-bold tracking-[0.4em] text-cyan-400 italic transform -skew-x-12 mt-1 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]">
+                                TETRIS GAME DISK 1 (1988)
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <h1 className="text-[3.5vh] leading-none font-bold tracking-[0.2em] text-[#00ff00] crt-glow inline-block">
+                                TETRIS
+                            </h1>
+                            <div className="text-[1vh] leading-tight font-bold tracking-[0.3em] opacity-40 uppercase mt-1">
+                                ELECTRONIKA 60 REPLICA (1984)
+                            </div>
+                        </>
+                    )}
+                </div>
 
-                        {/* Next Piece Mini Overlay */}
-                        <div className="absolute top-1 right-1 bg-white/10 p-1 border border-black/10 backdrop-blur-sm">
-                          <div className="text-[8px] font-bold mb-1">NEXT</div>
-                          <div className="flex flex-col items-center">
-                             {PIECES[gameState.nextPiece].map((row, y) => (
-                                  <div key={y} className="flex">
-                                  {row.map((cell, x) => (
-                                      <div key={`${y}-${x}`} className={`w-[6px] h-[6px] ${cell ? (isTechnicolor ? getPieceColorClass(gameState.nextPiece) : 'bg-black') : 'opacity-0'}`}></div>
-                                  ))}
+               {/* 2. Main 3-Column Display */}
+               <div className="flex-1 flex flex-row items-stretch justify-center gap-1 overflow-hidden">
+                   
+                   {/* COLUMN 1: LEFT (Stats, Icons, Nav) */}
+                   <div className="flex flex-col w-[22%] items-start justify-start pt-2 gap-2">
+                       {/* Stats Group */}
+                       <div className="w-full flex flex-col gap-2">
+                            <div className={`border-b ${isTechnicolor ? 'border-cyan-500/50' : 'border-[#00ff00]/30'} pb-0.5 mb-1`}>
+                                <span className={`${isTechnicolor ? 'bg-cyan-500/20 text-cyan-400' : 'bg-[#00ff00]/10 text-[#00ff00]'} px-1 py-0.5 text-[1.2vh] font-bold tracking-wider`}>
+                                    {isTechnicolor ? 'STATISTICS' : 'STATS'}
+                                </span>
+                            </div>
+                            
+                            <div className="flex flex-col gap-0.5">
+                                <span className={`text-[1vh] font-bold ${isTechnicolor ? 'text-white' : 'opacity-70'}`}>LINES:</span>
+                                <span className="text-[1.8vh] leading-none">{gameState.lines}</span>
+                            </div>
+
+                             <div className="flex flex-col gap-0.5">
+                                <span className={`text-[1vh] font-bold ${isTechnicolor ? 'text-white' : 'opacity-70'}`}>LEVEL:</span>
+                                <span className="text-[1.8vh] leading-none">{gameState.level}</span>
+                            </div>
+
+                             <div className="flex flex-col gap-0.5">
+                                <span className={`text-[1.1vh] font-bold ${isTechnicolor ? 'text-yellow-500' : 'opacity-70'}`}>SCORE:</span>
+                                <span className={`text-[1.8vh] leading-none ${isTechnicolor ? 'text-white font-mono' : ''}`}>
+                                    {isTechnicolor ? gameState.score.toString().padStart(6, '0') : gameState.score}
+                                </span>
+                            </div>
+                       </div>
+
+                       {/* Computer & Floppy Icons with Animation - BIGGER */ }
+                       <motion.div 
+                           initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                           animate={{ opacity: 0.8, scale: 1, y: 0 }}
+                           transition={{ delay: 0.2, duration: 0.5 }}
+                           className={`flex flex-col gap-1 items-center justify-center mt-2 w-full ${isTechnicolor ? 'drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]' : ''}`}
+                       >
+                           <motion.img 
+                               src="/assets/computer.png" 
+                               whileTap={{ scale: 0.9 }}
+                               animate={{ filter: isTechnicolor ? 'brightness(1.1) contrast(1.1)' : ['brightness(0.75) grayscale(100%)', 'brightness(0.85) grayscale(80%)', 'brightness(0.75) grayscale(100%)'] }}
+                               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                               className="w-[8vh] h-[8vh] object-contain" 
+                               alt="PC" 
+                            />
+                           <motion.img 
+                               src="/assets/floppy.png" 
+                               whileTap={{ scale: 0.9, rotate: -10 }}
+                               className={`w-[5vh] h-[5vh] object-contain ${isTechnicolor ? 'brightness-110' : 'filter grayscale brightness-75'}`} 
+                               alt="Disk" 
+                            />
+                        </motion.div>
+                        
+                    </div>
+
+                   {/* COLUMN 2: CENTER (The GRID) */}
+                   {/* COLUMN 2: CENTER (The GRID) - DESKTOP CLONE */}
+                   <div className="flex flex-col items-center justify-start flex-1 relative pt-1">
+                       
+                       {/* 1. Main Flex Container (Left Border | Grid | Right Border) */}
+                       <div className="flex justify-center w-full">
+                           
+                           {/* Left Border Column - Fixed Width to prevent shift */}
+                           <div className="flex flex-col select-none opacity-40 flex-none w-[2.5vh]">
+                                {Array.from({ length: getRows(gameState.theme, isMobile) }).map((_, i) => (
+                                  <div key={i} className={`${isTechnicolor ? 'text-[2.2vh] font-bold' : 'text-[1.2vh]'} h-[2.15vh] leading-[2.15vh] w-full text-center font-mono tracking-widest ${isTechnicolor ? 'text-blue-500' : 'text-[#00ff00]'}`}>
+                                      {getBorderChar('left')}
                                   </div>
-                              ))}
-                          </div>
+                                ))}
+                           </div>
+
+                           {/* The Main Grid Box */}
+                           <div className={`
+                                ${isTechnicolor ? 'bg-[#050510]' : 'bg-black/90'} 
+                                border ${isTechnicolor ? 'border-blue-500/30' : 'border-[#00ff00]/40'} 
+                                border-t-0 relative overflow-hidden flex flex-col flex-none
+                                shadow-[0_0_15px_rgba(0,0,0,0.5)]
+                                w-[calc(2.15vh*10+2px)]
+                            `}>
+                                <div className="flex-1 flex flex-col">
+                                    {renderedGrid.map((row, y) => (
+                                        <div key={y} className="flex">
+                                            {row.map((cell, x) => (
+                                                <div key={x} 
+                                                    className={`
+                                                        w-[2.15vh] h-[2.15vh] flex items-center justify-center relative
+                                                        ${!cell && isTechnicolor ? 'border border-blue-400/10' : ''}
+                                                    `}>
+                                                    {cell && isTechnicolor && (
+                                                        <div className={`absolute inset-0 ${getPieceColorClass(cell)}`}></div>
+                                                    )}
+                                                    {cell && !isTechnicolor && (
+                                                        <span className="crt-glow scale-110 text-[#00ff00] font-bold text-[2.15vh] leading-none">[]</span>
+                                                    )}
+                                                    {!cell && isTechnicolor && (
+                                                        <div className="w-[0.5vh] h-[0.5vh] bg-blue-400/30 rounded-full shadow-[0_0_3px_rgba(34,211,238,0.4)]"></div>
+                                                    )}
+                                                    {!cell && !isTechnicolor && (
+                                                        <span className="opacity-30 text-[#00ff00] text-[2.15vh] leading-none">.</span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Overlays inside the box */}
+                                {gameState.isPaused && !gameState.isGameOver && (
+                                    <div className={`absolute inset-0 z-50 flex items-center justify-center ${isTechnicolor ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/80'}`}>
+                                        <span className={`text-[3vh] font-bold tracking-widest blink ${isTechnicolor ? 'text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]' : 'text-[#00ff00] border-y border-[#00ff00] w-full text-center py-2'}`}>
+                                            PAUSED
+                                        </span>
+                                    </div>
+                                )}
+                                {gameState.isGameOver && (
+                                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
+                                        <span className="text-[3vh] font-bold text-red-500 mb-2 crt-glow">GAME OVER</span>
+                                    </div>
+                                )}
+                           </div>
+
+                           {/* Right Border Column - Fixed Width to prevent shift */}
+                           <div className="flex flex-col select-none opacity-40 flex-none w-[2.5vh]">
+                                {Array.from({ length: getRows(gameState.theme, isMobile) }).map((_, i) => (
+                                  <div key={i} className={`${isTechnicolor ? 'text-[2.2vh] font-bold' : 'text-[1.2vh]'} h-[2.15vh] leading-[2.15vh] w-full text-center font-mono tracking-widest ${isTechnicolor ? 'text-blue-500' : 'text-[#00ff00]'}`}>
+                                      {getBorderChar('right')}
+                                  </div>
+                                ))}
+                           </div>
+                       </div>
+
+                        {/* Bottom Decoration (Desktop Style) */}
+                        <div className={`w-full flex justify-center font-mono opacity-40 select-none mt-1 ${isTechnicolor ? 'text-blue-500' : 'text-[#00ff00]'}`}>
+                             {isTechnicolor ? (
+                                  /* Technicolor Star Row - Fixed Width Alignment with Upper Columns */
+                                  <div className="flex font-bold text-[2.2vh] items-center" style={{ width: 'calc(2.5vh + 2.15vh * 10 + 2.5vh + 2px)', transform: 'translateX(-0.1vh)' }}>
+                                      {/* Left Corner Star (Aligned with Left Border) */}
+                                      <div className="w-[2.5vh] flex justify-center flex-none">*</div>
+                                      
+                                      {/* Grid Bottom Stars (Aligned with 10 Columns) */}
+                                      <div style={{ width: 'calc(2.15vh * 10 + 2px)' }} className="flex flex-none">
+                                          <div className="w-[1px] invisible" /> {/* Left Grid Border 1px */}
+                                          {Array.from({ length: 10 }).map((_, i) => (
+                                              <div key={i} className="w-[2.15vh] flex justify-center flex-none">*</div>
+                                          ))}
+                                          <div className="w-[1px] invisible" /> {/* Right Grid Border 1px */}
+                                      </div>
+                                      
+                                      {/* Right Corner Star (Aligned with Right Border) */}
+                                      <div className="w-[2.5vh] flex justify-center flex-none">*</div>
+                                  </div>
+                              ) : (
+                                 <div className="flex flex-col items-center">
+                                     <div className="flex text-[1.5vh] leading-none tracking-tighter">
+                                         {Array.from({ length: 10 }).map((_, i) => (
+                                             <span key={i} className="scale-x-150 inline-block text-center w-[2.15vh]">==</span>
+                                         ))}
+                                     </div>
+                                     <div className="flex text-[1.5vh] leading-none tracking-tighter">
+                                         {Array.from({ length: 10 }).map((_, i) => (
+                                             <span key={i} className="scale-x-150 inline-block text-center w-[2.15vh]">\/</span>
+                                         ))}
+                                     </div>
+                                 </div>
+                             )}
                         </div>
 
-                        {/* Pause/Game Over Overlays for Mobile */}
-                        {gameState.isPaused && !gameState.isGameOver && (
-                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-20">
-                             <div className="text-white font-bold tracking-widest text-[20px] drop-shadow-md">PAUSED</div>
-                          </div>
-                        )}
-                        {gameState.isGameOver && (
-                           <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center z-20 p-4 text-center">
-                              <div className="text-red-500 font-bold tracking-widest text-[20px] mb-2 drop-shadow-md">GAME OVER</div>
-                              <button onClick={restartGame} className="px-4 py-1 bg-white/20 border border-white/40 text-white rounded text-[12px] active:bg-white/40">RETRY</button>
-                           </div>
-                        )}
-                   </div>
+                    </div>
+
+                   {/* COLUMN 3: RIGHT (Next, Mode) */}
+                   <div className="flex flex-col w-[22%] items-end justify-start pt-2 gap-4">
+                       
+                       {/* Next Pieces - BIGGER */}
+                       <div className="flex flex-col items-end gap-1 w-full">
+                            <div className={`text-[1.5vh] font-bold ${isTechnicolor ? 'text-yellow-500' : 'opacity-80'} mb-1 w-full text-right`}>
+                                {isTechnicolor ? 'NEXT PIECE:' : 'NEXT'}
+                            </div>
+                           {gameState.nextPieces.slice(0, 3).map((type, i) => (
+                                 type && PIECES[type] ? (
+                                 <div key={i} className={`relative w-[10vh] h-[5vh] flex items-center justify-center border-2 ${isTechnicolor ? 'border-white/20 bg-white/5' : 'border-[#00ff00]/30 bg-[#00ff00]/5'}`}>
+                                    <div className={`scale-100 flex flex-col items-center justify-center`}>
+                                         {PIECES[type]
+                                            .filter(row => row.some(cell => cell !== 0))
+                                            .map((row, y) => (
+                                              <div key={y} className="flex">
+                                               {row.map((cell, x) => (
+                                                   <div key={`${y}-${x}`} className={`w-[1.1vh] h-[1.1vh] flex items-center justify-center ${cell ? '' : 'opacity-0'}`}>
+                                                        {cell && (
+                                                            isTechnicolor ? (
+                                                                <div className={`w-full h-full ${getPieceColorClass(type)}`}></div>
+                                                            ) : (
+                                                                <span className="text-[#00ff00] crt-glow font-bold text-[1.1vh] leading-none">[]</span>
+                                                            )
+                                                        )}
+                                                   </div>
+                                               ))}
+                                              </div>
+                                          ))}
+                                    </div>
+                                 </div>
+                                 ) : null
+                            ))}
+                       </div>
+
+                       {/* Mode Arrows - BIGGER */}
+                       <div className="flex flex-col items-center gap-2 mt-4 pr-1">
+                           <button onClick={() => setTheme('electronika')} className={`${!isTechnicolor ? 'opacity-100' : 'opacity-30'} active:scale-90 transition-transform`}>
+                               <img src="/assets/arcade_arrow.png" className={`w-[8vh] h-[8vh] object-contain rotate-0 filter brightness-110`} />
+                           </button>
+                           <button onClick={() => setTheme('technicolor')} className={`${isTechnicolor ? 'opacity-100' : 'opacity-30'} active:scale-90 transition-transform`}>
+                               <img src="/assets/arcade_arrow.png" className={`w-[8vh] h-[8vh] object-contain rotate-180 filter brightness-110`} />
+                           </button>
+                       </div>
+
+                    </div>
                 </div>
-              </div>
+
+                {/* --- FOOTER ROW (HISTORY, RESTART, AUDIO) --- */}
+                <div className="flex-none flex flex-row items-end justify-center px-4 pb-2 w-full gap-2">
+                    {/* Left: Nav Buttons */}
+                    <div className="w-[25%] flex flex-col gap-1.5 pb-1">
+                        <button onClick={() => navigate('/history')} className={`${isTechnicolor ? 'bg-blue-900/40 border-blue-500/50 text-white' : 'bg-[#003300] border-[#00ff00]/40 text-[#00ff00]'} border text-[1.1vh] py-1.5 w-full font-bold shadow-lg uppercase tracking-widest`}>History</button>
+                        <button onClick={() => navigate('/movies')} className={`${isTechnicolor ? 'bg-blue-900/40 border-blue-500/50 text-white' : 'bg-[#003300] border-[#00ff00]/40 text-[#00ff00]'} border text-[1.1vh] py-1.5 w-full font-bold shadow-lg uppercase tracking-widest`}>Movies</button>
+                    </div>
+
+                    {/* Center: Restart Button */}
+                    <div className="flex-1 flex justify-center pb-1">
+                        <button onClick={restartGame} className={`text-[1.4vh] border-2 ${isTechnicolor ? 'border-blue-500/60 text-white bg-blue-950/40' : 'border-[#00ff00]/50 text-[#00ff00]'} px-6 py-2 hover:brightness-125 transition-all font-black uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(59,130,246,0.2)]`}>
+                             {isTechnicolor ? '[ TRY AGAIN ]' : '[ RESTART SYSTEM ]'}
+                        </button>
+                    </div>
+
+                    {/* Right: Audio Visualizer */}
+                    <div className="w-[25%] flex justify-end">
+                        <MusicVisualizer 
+                            isPlaying={!gameState.isPaused && !gameState.isGameOver} 
+                            isMuted={isMuted} 
+                            onToggle={toggleMute} 
+                            theme={gameState.theme}
+                        />
+                    </div>
+                </div>
             </div>
 
-            {/* Controls Section */}
-            <div className="flex flex-col items-center mt-2 scale-[0.9] origin-top">
-               <div className="flex justify-between w-full px-4 items-center mb-4">
-                  {/* D-PAD */}
-                  <div className="gameboy-dpad">
-                      <div className="dpad-up dpad-btn flex items-center justify-center" onTouchStart={(e) => { e.preventDefault(); handleRotate(); }}>
-                           <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[8px] border-b-gray-400"></div>
-                      </div>
-                      <div className="dpad-down dpad-btn flex items-center justify-center" onTouchStart={(e) => { e.preventDefault(); move(0); }}>
-                           <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-gray-400"></div>
-                      </div>
-                      <div className="dpad-left dpad-btn flex items-center justify-center" onTouchStart={(e) => { e.preventDefault(); move(-1); }}>
-                           <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[8px] border-r-gray-400"></div>
-                      </div>
-                      <div className="dpad-right dpad-btn flex items-center justify-center" onTouchStart={(e) => { e.preventDefault(); move(1); }}>
-                           <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-l-[8px] border-l-gray-400"></div>
-                      </div>
-                      <div className="dpad-center"></div>
-                  </div>
-
-                  {/* A/B Buttons */}
-                  <div className="gameboy-buttons">
-                      <button className="gb-btn flex flex-col items-center justify-center" onTouchStart={(e) => { e.preventDefault(); handleRotate(); }}>
-                          <span className="mt-1">A</span>
-                      </button>
-                      <button className="gb-btn flex flex-col items-center justify-center" onTouchStart={(e) => { e.preventDefault(); hardDrop(); }}>
-                          <span className="mt-1">B</span>
-                      </button>
-                  </div>
-               </div>
-
-               {/* Select / Start */}
-               <div className="gb-select-start mt-4">
-                  <div className="gb-pill-btn" data-label="Mode" onClick={() => setTheme(isTechnicolor ? 'electronika' : 'technicolor')}></div>
-                  <div className="gb-pill-btn" data-label="Pause" onClick={() => setGameState(prev => ({ ...prev, isPaused: !prev.isPaused }))}></div>
-               </div>
-
-               {/* Navigation for Mobile */}
-               <div className="flex gap-4 mt-4">
-                  <button 
-                      onClick={() => navigate('/history')}
-                      className="text-[10px] font-bold text-gray-600 bg-gray-300 px-2 py-0.5 rounded shadow-sm active:shadow-none uppercase"
-                  >
-                      History
-                  </button>
-                  <button 
-                      onClick={() => navigate('/movies')}
-                      className="text-[10px] font-bold text-gray-600 bg-gray-300 px-2 py-0.5 rounded shadow-sm active:shadow-none uppercase"
-                  >
-                      Movies
-                  </button>
-               </div>
+           {/* --- BOTTOM SECTION (CONTROLS) --- */}
+           <div className="flex-none h-[36vh] relative bg-gradient-to-t from-[#151515] to-transparent z-20">
                
-               {/* Logo */}
-               <div className={`mt-6 italic font-black tracking-tighter self-start ml-4 transition-colors ${isTechnicolor ? 'text-cyan-500/40' : 'text-[#302058]'}`}>
-                  <span className="text-[10px]">Nintendo</span>
-                  <span className="text-[14px] ml-1">GAME BOY</span>
-                  <span className="text-[6px] align-top ml-0.5">TM</span>
+               <div className="h-full w-full max-w-lg mx-auto grid grid-cols-3 relative px-2 pb-4">
+                   
+                     {/* Left: D-Pad - Console Style */}
+                     <div className="flex items-start justify-start pl-4 pt-8">
+                        <div className="relative w-[15vh] h-[15vh]">
+                            {/* D-Pad Background Cross */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-[4.8vh] h-[15vh] bg-[#222] rounded-md shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"></div>
+                                <div className="w-[15vh] h-[4.8vh] bg-[#222] rounded-md absolute shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"></div>
+                            </div>
+                            
+                            {/* Up - Hard Drop */}
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[4.8vh] h-[5.2vh] bg-[#2a2a2a] active:bg-[#111] rounded-t-md flex items-center justify-center active:scale-95 shadow-lg border-t border-x border-gray-600/20"
+                                 onTouchStart={(e) => { e.preventDefault(); hardDrop(); }}
+                                 onClick={(e) => { e.preventDefault(); hardDrop(); }}>
+                                <span className="text-[0.8vh] font-bold text-gray-500 uppercase tracking-tighter">Hard</span>
+                            </div>
+                            
+                            {/* Down - Soft Drop */}
+                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[4.8vh] h-[5.2vh] bg-[#2a2a2a] active:bg-[#111] rounded-b-md flex items-center justify-center active:scale-95 shadow-lg border-b border-x border-gray-600/20"
+                                 onTouchStart={(e) => { e.preventDefault(); drop(); }}
+                                 onClick={(e) => { e.preventDefault(); drop(); }}>
+                                 <span className="text-[2vh] text-gray-400">▼</span>
+                            </div>
+
+                            {/* Left */}
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[5.2vh] h-[4.8vh] bg-[#2a2a2a] active:bg-[#111] rounded-l-md flex items-center justify-center active:scale-95 shadow-lg border-y border-l border-gray-600/20"
+                                 onTouchStart={(e) => { e.preventDefault(); move(-1); }}
+                                 onClick={(e) => { e.preventDefault(); move(-1); }}>
+                                 <span className="text-[2vh] text-gray-400">◀</span>
+                            </div>
+
+                            {/* Right */}
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[5.2vh] h-[4.8vh] bg-[#2a2a2a] active:bg-[#111] rounded-r-md flex items-center justify-center active:scale-95 shadow-lg border-y border-r border-gray-600/20"
+                                 onTouchStart={(e) => { e.preventDefault(); move(1); }}
+                                 onClick={(e) => { e.preventDefault(); move(1); }}>
+                                 <span className="text-[2vh] text-gray-400">▶</span>
+                            </div>
+
+                            {/* Center indentation */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3.5vh] h-[3.5vh] bg-[#1a1a1a] rounded-full shadow-[inset_0_0_5px_black]"></div>
+                        </div>
+                    </div>
+
+                    {/* Center: Select/Start Pill Buttons */}
+                    <div className="flex flex-col items-center justify-end pb-6">
+                         <div className="flex gap-6 transform rotate-[-25deg]">
+                             <div className="flex flex-col items-center gap-1">
+                                 <button className="w-14 h-5 rounded-full bg-[#3a3a3a] border-b-4 border-[#1a1a1a] active:border-b-0 active:translate-y-[2px] shadow-xl"
+                                      onClick={() => setGameState(prev => ({ ...prev, isPaused: !prev.isPaused }))}></button>
+                                 <span className="text-[0.9vh] font-black text-gray-500 tracking-widest uppercase">Select</span>
+                             </div>
+                             <div className="flex flex-col items-center gap-1">
+                                 <button className="w-14 h-5 rounded-full bg-[#3a3a3a] border-b-4 border-[#1a1a1a] active:border-b-0 active:translate-y-[2px] shadow-xl"
+                                      onClick={restartGame}></button>
+                                 <span className="text-[0.9vh] font-black text-gray-500 tracking-widest uppercase">Start</span>
+                             </div>
+                         </div>
+                    </div>
+
+                    {/* Right: A/B Buttons - Red Circles Staggered */}
+                    <div className="flex items-start justify-end pr-4 pt-8">
+                        <div className="relative w-[18vh] h-[15vh]">
+                            {/* B Button (Left/Lower) */}
+                            <div className="absolute left-0 bottom-0 flex flex-col items-center group">
+                                <button 
+                                    className="w-[8vh] h-[8vh] rounded-full bg-[#a31a34] border-b-4 border-[#6b1122] active:border-b-0 active:translate-y-1 shadow-[0_5px_15px_rgba(0,0,0,0.5)] flex items-center justify-center"
+                                    onTouchStart={(e) => { e.preventDefault(); handleRotateCCW(); }}
+                                    onClick={(e) => { e.preventDefault(); handleRotateCCW(); }}
+                                >
+                                    <span className="text-[3vh] font-black text-white/50">B</span>
+                                </button>
+                            </div>
+
+                            {/* A Button (Right/Higher) */}
+                            <div className="absolute right-0 top-0 flex flex-col items-center group">
+                                <button 
+                                    className="w-[8vh] h-[8vh] rounded-full bg-[#a31a34] border-b-4 border-[#6b1122] active:border-b-0 active:translate-y-1 shadow-[0_5px_15px_rgba(0,0,0,0.5)] flex items-center justify-center"
+                                    onTouchStart={(e) => { e.preventDefault(); handleRotate(); }}
+                                    onClick={(e) => { e.preventDefault(); handleRotate(); }}
+                                >
+                                    <span className="text-[3vh] font-black text-white/50">A</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                </div>
-            </div>
-          </div>
+           </div>
         </div>
       ) : (
     <div className={`h-screen w-screen fixed inset-0 bg-black ${mainTextColor} p-[2vh] font-mono select-none overflow-hidden relative font-bold `} tabIndex={0}>
@@ -888,15 +1151,15 @@ const TetrisGame: React.FC = () => {
                         <h3 className="uppercase tracking-widest text-[1.8vh] opacity-50 mb-1 font-bold text-yellow-300 drop-shadow-[0_0_5px_rgba(255,255,0,0.5)]">NEXT PIECE:</h3>
                         <div className="flex items-center justify-center min-h-[10vh] border-2 border-white/10 bg-white/5 rounded shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
                             <div className="flex flex-col">
-                                {PIECES[gameState.nextPiece].map((row, y) => (
+                                {gameState.nextPieces[0] && PIECES[gameState.nextPieces[0]] ? PIECES[gameState.nextPieces[0]].map((row, y) => (
                                     <div key={y} className="flex">
                                     {row.map((cell, x) => (
-                                        <span key={`${y}-${x}`} className={`w-[2.5vh] h-[2.5vh] ${cell ? getPieceColorClass(gameState.nextPiece) : 'opacity-0'}`}>
+                                        <span key={`${y}-${x}`} className={`w-[2.5vh] h-[2.5vh] ${cell ? getPieceColorClass(gameState.nextPieces[0]) : 'opacity-0'}`}>
                                         {cell ? '' : ''}
                                         </span>
                                     ))}
                                     </div>
-                                ))}
+                                )) : null}
                             </div>
                         </div>
                      </div>
@@ -905,13 +1168,13 @@ const TetrisGame: React.FC = () => {
                      <div className="mt-[0.8vh] mb-[1vh] flex flex-col gap-2 shrink-0">
                          <button 
                            onClick={() => navigate('/history')}
-                           className="border border-blue-500/50 text-blue-400 py-1 hover:bg-blue-500/20 text-[1.8vh] uppercase font-bold transition-colors"
+                           className="border border-blue-500/50 text-blue-400 py-1 hover:bg-blue-500/20 text-[1.8vh] uppercase font-bold transition-colors w-full"
                          >
                            HISTORY
                          </button>
                          <button 
                            onClick={() => navigate('/movies')}
-                           className="border border-blue-500/50 text-blue-400 py-1 hover:bg-blue-500/20 text-[1.8vh] uppercase font-bold transition-colors"
+                           className="border border-blue-500/50 text-blue-400 py-1 hover:bg-blue-500/20 text-[1.8vh] uppercase font-bold transition-colors w-full"
                          >
                            MOVIES
                          </button>
@@ -943,7 +1206,7 @@ const TetrisGame: React.FC = () => {
                         <div className="flex flex-col items-center justify-center min-h-[16vh]">
                         <h2 className="text-[1.6vh] uppercase opacity-70 mb-[1.2vh] tracking-[0.2em] font-bold">NEXT PIECE:</h2>
                         <div className="flex flex-col items-center justify-center p-[1vh] h-[10vh]">
-                            {PIECES[gameState.nextPiece].map((row, y) => (
+                            {gameState.nextPieces[0] && PIECES[gameState.nextPieces[0]] ? PIECES[gameState.nextPieces[0]].map((row, y) => (
                                 <div key={y} className="flex">
                                 {row.map((cell, x) => (
                                     <span key={`${y}-${x}`} className={`w-[2.2vh] h-[2.2vh] flex items-center justify-center ${cell ? 'opacity-100 crt-glow text-[#00ff00]' : 'opacity-0'}`}>
@@ -951,7 +1214,7 @@ const TetrisGame: React.FC = () => {
                                     </span>
                                 ))}
                                     </div>
-                                ))}
+                                )) : null}
                             </div>
                         </div>
                     </div>
@@ -1016,7 +1279,7 @@ const TetrisGame: React.FC = () => {
               <div className="flex justify-center w-full">
               {/* Left Border */}
                <div className="flex flex-col select-none opacity-40">
-                {Array.from({ length: getRows(gameState.theme) }).map((_, i) => (
+                {Array.from({ length: getRows(gameState.theme, isMobile) }).map((_, i) => (
                   <div key={i} style={{ height: cellHeight, lineHeight: cellHeight }} className={`text-[2.2vh] px-[1vh] font-mono tracking-widest ${isTechnicolor ? 'text-blue-500' : ''}`}>
                       {getBorderChar('left')}
                   </div>
@@ -1095,7 +1358,7 @@ const TetrisGame: React.FC = () => {
 
               {/* Right Border */}
               <div className="flex flex-col select-none opacity-40">
-                {Array.from({ length: getRows(gameState.theme) }).map((_, i) => (
+                {Array.from({ length: getRows(gameState.theme, isMobile) }).map((_, i) => (
                   <div key={i} style={{ height: cellHeight, lineHeight: cellHeight }} className={`text-[2.2vh] px-[1vh] font-mono tracking-widest ${isTechnicolor ? 'text-blue-500' : ''}`}>
                       {getBorderChar('right')}
                   </div>

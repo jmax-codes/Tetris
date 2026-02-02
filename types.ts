@@ -12,7 +12,7 @@ export type Grid = (string | null)[][];
 export interface GameState {
   grid: Grid;
   activePiece: Piece | null;
-  nextPiece: PieceType;
+  nextPieces: PieceType[];
   score: number;
   level: number;
   lines: number;
