@@ -794,6 +794,7 @@ const TetrisGame: React.FC = () => {
                                    isMuted={isMuted} 
                                    onToggle={toggleMute} 
                                    theme={gameState.theme}
+                                   isMobile={true}
                                />
                             </div>
                         </motion.div>
@@ -1575,7 +1576,8 @@ const TetrisGame: React.FC = () => {
                                 isPlaying={!gameState.isPaused && !gameState.isGameOver} 
                                 isMuted={isMuted} 
                                 onToggle={toggleMute} 
-                                theme="technicolor" 
+                                theme="technicolor"
+                                isMobile={false}
                             />
                         </div>
                     </div>
@@ -1625,7 +1627,8 @@ const TetrisGame: React.FC = () => {
                                 isPlaying={!gameState.isPaused && !gameState.isGameOver} 
                                 isMuted={isMuted} 
                                 onToggle={toggleMute} 
-                                theme="electronika" 
+                                theme="electronika"
+                                isMobile={false}
                             />
                         </div>
                     </div>
