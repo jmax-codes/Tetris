@@ -951,7 +951,7 @@ const TetrisGame: React.FC = () => {
                             </div>
                            {gameState.nextPieces.slice(0, 3).map((type, i) => (
                                  type && PIECES[type] ? (
-                                 <div key={i} className={`relative w-[10vh] h-[5vh] flex items-center justify-center border-2 ${isTechnicolor ? 'border-white/20 bg-white/5' : 'border-[#00ff00]/30 bg-[#00ff00]/5'}`}>
+                                 <div key={i} className={`relative w-[8.5vh] h-[8.5vh] flex items-center justify-center border-2 ${isTechnicolor ? 'border-white/20 bg-white/5' : 'border-[#00ff00]/30 bg-[#00ff00]/5'}`}>
                                     <div className={`scale-100 flex flex-col items-center justify-center`}>
                                          {PIECES[type]
                                             .filter(row => row.some(cell => cell !== 0))
@@ -977,12 +977,12 @@ const TetrisGame: React.FC = () => {
                        </div>
 
                        {/* Mode Arrows - BIGGER */}
-                       <div className="flex flex-col items-center gap-2 mt-4 pr-1">
+                       <div className="flex flex-col items-center gap-0 mt-4 pr-1">
                            <button onClick={() => setTheme('electronika')} className={`${!isTechnicolor ? 'opacity-100' : 'opacity-30'} active:scale-90 transition-transform`}>
-                               <img src="/assets/arcade_arrow.png" className={`w-[8vh] h-[8vh] object-contain rotate-0 filter brightness-110`} />
+                               <img src="/assets/arcade_arrow.png" className={`w-[6.5vh] h-[6.5vh] object-contain rotate-0 filter brightness-110`} />
                            </button>
                            <button onClick={() => setTheme('technicolor')} className={`${isTechnicolor ? 'opacity-100' : 'opacity-30'} active:scale-90 transition-transform`}>
-                               <img src="/assets/arcade_arrow.png" className={`w-[8vh] h-[8vh] object-contain rotate-180 filter brightness-110`} />
+                               <img src="/assets/arcade_arrow.png" className={`w-[6.5vh] h-[6.5vh] object-contain rotate-180 filter brightness-110`} />
                            </button>
                        </div>
 
