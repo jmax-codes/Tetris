@@ -1516,24 +1516,7 @@ const TetrisGame: React.FC = () => {
                         STATISTICS
                     </h2>
 
-                    {/* Technicolor Special Buttons - Circle Style */}
-                    <div className="flex justify-center gap-[1.5vh] mb-[3vh] px-1 mt-[1vh]">
-                        <div className="flex flex-col items-center gap-2">
-                            <button 
-                                onClick={() => navigate('/history')}
-                                className="w-[5vh] h-[5vh] rounded-full bg-[#222b35] border-2 border-cyan-400/50 shadow-lg shadow-cyan-900/40 active:scale-95 transition-all"
-                            ></button>
-                            <span className="text-[1.1vh] font-black italic text-cyan-400/80 tracking-widest">HISTORY</span>
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <button 
-                                onClick={() => navigate('/movies')}
-                                className="w-[5vh] h-[5vh] rounded-full bg-[#2b2235] border-2 border-purple-400/50 shadow-lg shadow-purple-900/40 active:scale-95 transition-all"
-                            ></button>
-                            <span className="text-[1.1vh] font-black italic text-purple-400/80 tracking-widest">MOVIES</span>
-                        </div>
-                    </div>
-                    
+
                     <div className="flex-1 flex flex-col justify-between py-1">
                         <div className="flex flex-col gap-[1.8vh] justify-start px-2">
                         {['T', 'J', 'Z', 'O', 'S', 'L', 'I'].map(type => {
@@ -1604,23 +1587,7 @@ const TetrisGame: React.FC = () => {
                 <>
                      <h2 className="text-center text-[2.8vh] mb-[1.5vh] crt-glow border-b border-[#00ff00]/40 pb-[1.2vh] tracking-[0.2em] font-bold uppercase leading-none">CONTROLS</h2>
                     
-                     {/* Electronika Special Buttons - Hardware Circle Style */}
-                    <div className="flex justify-center gap-[1.5vh] mb-[3vh] w-full px-2 mt-[1vh]">
-                        <div className="flex flex-col items-center gap-2">
-                            <button 
-                                onClick={() => navigate('/history')}
-                                className="w-[5vh] h-[5vh] rounded-full bg-[#1a221a] border-2 border-[#00ff00]/40 shadow-lg shadow-green-950/50 active:scale-95 transition-all crt-glow"
-                            ></button>
-                            <span className="text-[1.1vh] font-mono font-bold text-[#00ff00]/70 tracking-[0.2em]">HISTORY</span>
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <button 
-                                onClick={() => navigate('/movies')}
-                                className="w-[5vh] h-[5vh] rounded-full bg-[#1a221a] border-2 border-[#00ff00]/40 shadow-lg shadow-green-950/50 active:scale-95 transition-all crt-glow"
-                            ></button>
-                            <span className="text-[1.1vh] font-mono font-bold text-[#00ff00]/70 tracking-[0.2em]">MOVIES</span>
-                        </div>
-                    </div>
+
                     <div className="flex-1 flex flex-col justify-between py-1">
                         <div className="space-y-[1.8vh]">
                         <p className="text-[1.8vh] opacity-40 tracking-[0.3em] font-bold uppercase">NAVIGATION:</p>
