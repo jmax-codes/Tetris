@@ -124,14 +124,28 @@ const TetrisGame: React.FC = () => {
     if (!themeAudio) return;
 
     try {
-      // Try to play and immediately pause to unlock audio
+      // Load the audio first
+      await new Promise((resolve, reject) => {
+        if (themeAudio.readyState >= 2) {
+          resolve(true);
+        } else {
+          themeAudio.addEventListener('canplay', () => resolve(true), { once: true });
+          themeAudio.addEventListener('error', reject, { once: true });
+          themeAudio.load();
+        }
+      });
+
+      // Try to play and immediately pause to unlock audio context
+      themeAudio.volume = 0;
       await themeAudio.play();
       themeAudio.pause();
       themeAudio.currentTime = 0;
+      themeAudio.volume = 0.4;
+      
       setAudioInitialized(true);
-      console.log('Audio initialized successfully');
+      console.log('✅ Audio initialized successfully');
     } catch (error) {
-      console.log('Audio initialization pending user interaction:', error);
+      console.log('⚠️ Audio initialization pending user interaction:', error);
     }
   }, [audioInitialized]);
 
@@ -146,6 +160,36 @@ const TetrisGame: React.FC = () => {
     themeAudio.muted = isMuted;
     gameOverAudio.muted = isMuted;
 
+    const playThemeAudio = async () => {
+      if (themeAudio.paused && !isMuted) {
+        try {
+          // Ensure audio is loaded
+          if (themeAudio.readyState < 2) {
+            await new Promise((resolve) => {
+              themeAudio.addEventListener('canplay', resolve, { once: true });
+              themeAudio.load();
+            });
+          }
+          
+          // Reset and play
+          themeAudio.currentTime = 0;
+          await themeAudio.play();
+          console.log('🎵 Theme music playing');
+        } catch (e) {
+          console.error('❌ Theme audio failed:', e);
+          // Retry once after a short delay
+          setTimeout(async () => {
+            try {
+              await themeAudio.play();
+              console.log('🎵 Theme music playing (retry)');
+            } catch (retryError) {
+              console.error('❌ Theme audio retry failed:', retryError);
+            }
+          }, 100);
+        }
+      }
+    };
+
     if (gameState.isGameOver) {
        themeAudio.pause();
        themeAudio.currentTime = 0;
@@ -157,10 +201,8 @@ const TetrisGame: React.FC = () => {
     } else if (gameState.isPaused) {
         themeAudio.pause();
     } else {
-        // Game is running
-        if (themeAudio.paused && !isMuted) {
-            themeAudio.play().catch(e => console.error("Theme audio failed:", e));
-        }
+        // Game is running - play theme
+        playThemeAudio();
     }
   }, [gameState.isGameOver, gameState.isPaused, isMuted, audioInitialized]);
 
@@ -226,11 +268,30 @@ const TetrisGame: React.FC = () => {
   }, [gameState.isGameOver, audioInitialized, isMuted, playSyntheticGameOver]);
 
   const toggleMute = async () => {
+    const themeAudio = audioThemeRef.current;
+    
     // Initialize audio if not already done
     if (!audioInitialized) {
       await initializeAudio();
     }
-    setIsMuted(prev => !prev);
+    
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
+    
+    // If unmuting and game is active, ensure audio plays
+    if (!newMutedState && !gameState.isGameOver && !gameState.isPaused && themeAudio) {
+      setTimeout(async () => {
+        try {
+          if (themeAudio.paused) {
+            themeAudio.currentTime = 0;
+            await themeAudio.play();
+            console.log('🎵 Audio resumed after unmute');
+          }
+        } catch (e) {
+          console.error('❌ Failed to resume audio:', e);
+        }
+      }, 50);
+    }
   };
 
   // Test function to manually play game over sound
