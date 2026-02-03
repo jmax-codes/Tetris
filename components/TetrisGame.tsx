@@ -951,7 +951,7 @@ const TetrisGame: React.FC = () => {
                             </div>
                            {gameState.nextPieces.slice(0, 3).map((type, i) => (
                                  type && PIECES[type] ? (
-                                 <div key={i} className={`relative w-[8.5vh] h-[8.5vh] flex items-center justify-center border-2 ${isTechnicolor ? 'border-white/20 bg-white/5' : 'border-[#00ff00]/30 bg-[#00ff00]/5'}`}>
+                                 <div key={i} className={`relative w-[6.5vh] h-[6.5vh] flex items-center justify-center border-2 ${isTechnicolor ? 'border-white/20 bg-white/5' : 'border-[#00ff00]/30 bg-[#00ff00]/5'}`}>
                                     <div className={`scale-100 flex flex-col items-center justify-center`}>
                                          {PIECES[type]
                                             .filter(row => row.some(cell => cell !== 0))
