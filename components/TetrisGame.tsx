@@ -947,7 +947,7 @@ const TetrisGame: React.FC = () => {
                        {/* Next Pieces - BIGGER */}
                        <div className="flex flex-col items-end gap-1 w-full">
                             <div className={`text-[1.5vh] font-bold ${isTechnicolor ? 'text-yellow-500' : 'opacity-80'} mb-1 w-full text-right`}>
-                                {isTechnicolor ? 'NEXT PIECE:' : 'NEXT'}
+                                NEXT:
                             </div>
                            {gameState.nextPieces.slice(0, 3).map((type, i) => (
                                  type && PIECES[type] ? (
