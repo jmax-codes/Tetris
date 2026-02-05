@@ -110,9 +110,23 @@ const TetrisGame: React.FC = () => {
       console.error('Failed to initialize audio:', error);
     }
 
+    // Mobile-specific: Initialize audio on first touch/click anywhere
+    const handleFirstInteraction = async () => {
+      if (!audioInitialized) {
+        console.log('📱 First interaction detected, initializing audio...');
+        await initializeAudio();
+      }
+    };
+
+    // Add listeners for mobile
+    document.addEventListener('touchstart', handleFirstInteraction, { once: true, passive: true });
+    document.addEventListener('click', handleFirstInteraction, { once: true });
+
     return () => {
       audioThemeRef.current?.pause();
       audioGameOverRef.current?.pause();
+      document.removeEventListener('touchstart', handleFirstInteraction);
+      document.removeEventListener('click', handleFirstInteraction);
     };
   }, []);
 
@@ -272,6 +286,7 @@ const TetrisGame: React.FC = () => {
     
     // Initialize audio if not already done
     if (!audioInitialized) {
+      console.log('🔊 Initializing audio from toggle...');
       await initializeAudio();
     }
     
@@ -280,17 +295,39 @@ const TetrisGame: React.FC = () => {
     
     // If unmuting and game is active, ensure audio plays
     if (!newMutedState && !gameState.isGameOver && !gameState.isPaused && themeAudio) {
+      // For mobile: force reload and play
       setTimeout(async () => {
         try {
-          if (themeAudio.paused) {
-            themeAudio.currentTime = 0;
-            await themeAudio.play();
-            console.log('🎵 Audio resumed after unmute');
-          }
+          // Force load the audio again
+          themeAudio.load();
+          
+          // Wait for it to be ready
+          await new Promise((resolve) => {
+            if (themeAudio.readyState >= 2) {
+              resolve(true);
+            } else {
+              themeAudio.addEventListener('canplaythrough', () => resolve(true), { once: true });
+            }
+          });
+          
+          // Reset and play
+          themeAudio.currentTime = 0;
+          themeAudio.muted = false;
+          await themeAudio.play();
+          console.log('🎵 Audio resumed after unmute (mobile-optimized)');
         } catch (e) {
           console.error('❌ Failed to resume audio:', e);
+          // Retry one more time
+          setTimeout(async () => {
+            try {
+              await themeAudio.play();
+              console.log('🎵 Audio resumed (retry successful)');
+            } catch (retryError) {
+              console.error('❌ Audio retry failed:', retryError);
+            }
+          }, 200);
         }
-      }, 50);
+      }, 100);
     }
   };
 
@@ -722,7 +759,7 @@ const TetrisGame: React.FC = () => {
   };
 
   // Helper to prevent double-firing on mobile
-  const handleControlAction = useCallback((action: () => void) => (e: React.PointerEvent | React.TouchEvent | React.MouseEvent) => {
+  const handleControlAction = useCallback((action: () => void) => async (e: React.PointerEvent | React.TouchEvent | React.MouseEvent) => {
     // Prevent default browser behavior (scrolling/zooming/emulated clicks)
     if (e.cancelable) e.preventDefault();
     e.stopPropagation();
@@ -732,8 +769,13 @@ const TetrisGame: React.FC = () => {
     if (now - lastActionTimeRef.current < 60) return;
     lastActionTimeRef.current = now;
 
+    // Initialize audio on first mobile interaction
+    if (!audioInitialized) {
+      await initializeAudio();
+    }
+
     action();
-  }, []);
+  }, [audioInitialized, initializeAudio]);
 
   const mainTextColor = isTechnicolor ? 'text-white' : 'text-[#00ff00]';
   const glowClass = isTechnicolor ? 'drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]' : 'crt-glow';
